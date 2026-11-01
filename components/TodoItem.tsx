@@ -1,6 +1,12 @@
 // #104 — TodoItem component (with #108 deletion support)
 import type { Todo } from "@/types/todo";
 
+/** Today's date with the time component zeroed out, for overdue comparisons. */
+function startOfToday(): Date {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+}
+
 interface TodoItemProps {
   todo: Todo;
   onToggle: (id: string) => void;
@@ -9,6 +15,11 @@ interface TodoItemProps {
 
 export default function TodoItem({ todo, onToggle, onDelete }: TodoItemProps) {
   const labelId = `todo-label-${todo.id}`;
+
+  // Render the due date in the user's locale; flag it when overdue.
+  const dueDate = todo.dueDate ? new Date(`${todo.dueDate}T00:00:00`) : null;
+  const isOverdue =
+    dueDate !== null && !todo.completed && dueDate < startOfToday();
 
   return (
     <li className="flex items-center gap-3 rounded-md border border-gray-200 bg-white px-3 py-2 shadow-sm dark:border-gray-700 dark:bg-gray-800">
@@ -31,6 +42,18 @@ export default function TodoItem({ todo, onToggle, onDelete }: TodoItemProps) {
       >
         {todo.title}
       </label>
+      {dueDate && (
+        <time
+          dateTime={todo.dueDate}
+          className={`shrink-0 text-xs ${
+            isOverdue
+              ? "font-medium text-red-600 dark:text-red-400"
+              : "text-gray-500 dark:text-gray-400"
+          }`}
+        >
+          Due {dueDate.toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+        </time>
+      )}
       <button
         type="button"
         onClick={() => onDelete(todo.id)}
