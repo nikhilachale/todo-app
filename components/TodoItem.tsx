@@ -1,11 +1,6 @@
 // #104 — TodoItem component (with #108 deletion support)
+import { useSyncExternalStore } from "react";
 import type { Todo } from "@/types/todo";
-
-/** Today's date with the time component zeroed out, for overdue comparisons. */
-function startOfToday(): Date {
-  const now = new Date();
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
-}
 
 interface TodoItemProps {
   todo: Todo;
@@ -13,13 +8,37 @@ interface TodoItemProps {
   onDelete: (id: string) => void;
 }
 
+const emptySubscribe = () => () => {};
+/** False during SSR/prerender, true once running on the client. */
+const useMounted = () =>
+  useSyncExternalStore(
+    emptySubscribe,
+    () => true,
+    () => false,
+  );
+
 export default function TodoItem({ todo, onToggle, onDelete }: TodoItemProps) {
   const labelId = `todo-label-${todo.id}`;
 
-  // Render the due date in the user's locale; flag it when overdue.
-  const dueDate = todo.dueDate ? new Date(`${todo.dueDate}T00:00:00`) : null;
-  const isOverdue =
-    dueDate !== null && !todo.completed && dueDate < startOfToday();
+  // The formatted date and overdue flag depend on the visitor's locale and
+  // calendar day, so they are only computed after mount on the client.
+  // Rendering nothing on the server keeps the prerendered HTML free of
+  // machine-local dates and avoids hydration mismatches.
+  const mounted = useMounted();
+
+  let dueInfo: { text: string; overdue: boolean } | null = null;
+  if (mounted && todo.dueDate) {
+    const due = new Date(`${todo.dueDate}T00:00:00`);
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    dueInfo = {
+      text: due.toLocaleDateString(undefined, {
+        month: "short",
+        day: "numeric",
+      }),
+      overdue: !todo.completed && due < today,
+    };
+  }
 
   return (
     <li className="flex items-center gap-3 rounded-md border border-gray-200 bg-white px-3 py-2 shadow-sm dark:border-gray-700 dark:bg-gray-800">
@@ -42,16 +61,16 @@ export default function TodoItem({ todo, onToggle, onDelete }: TodoItemProps) {
       >
         {todo.title}
       </label>
-      {dueDate && (
+      {dueInfo && (
         <time
           dateTime={todo.dueDate}
           className={`shrink-0 text-xs ${
-            isOverdue
+            dueInfo.overdue
               ? "font-medium text-red-600 dark:text-red-400"
               : "text-gray-500 dark:text-gray-400"
           }`}
         >
-          Due {dueDate.toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+          Due {dueInfo.text}
         </time>
       )}
       <button
